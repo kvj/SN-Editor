@@ -1,11 +1,12 @@
 document.addEventListener('DOMContentLoaded', (event) => {
     let textarea = document.getElementById('textarea');
+    let sidebar = document.getElementById('sidebar');
     let context = {
         uuid: undefined,
         lines: [],
         tab: 2,
         header: {},
-        config: {}, // Can be loaded remotely
+        config: undefined, // Can be loaded remotely
     };
     const headerRe = /^\/\/\*\* (.*) \*\*$/;
     const lineRe = /(\s*)?(.*)(\s*)?/;
@@ -33,19 +34,6 @@ document.addEventListener('DOMContentLoaded', (event) => {
         if (type == 'text') el.value = value || '';
         if (value !== def && cb) cb(value, true);
     };
-    setupToolbar('tool_theme', 'checkbox', 'dark', false, (val) => {
-        document.body.className = val? 'dark': 'light';
-    });
-    setupToolbar('tool_tab', 'number', 'tab', 2, (val, init) => {
-        if (context.uuid) { // Re-tab
-            readText(textarea.value || '', false);
-            context.tab = val;
-            putData([-1, -1]);
-        } else
-            context.tab = val; // Only change
-    });
-    setupToolbar('tool_config', 'text', 'config_url', undefined, (val) => {
-    });
     const notifyReady = () => {
         if(window.parent && window.parent !== window) {
             window.parent.postMessage({status: 'ready'}, '*');
@@ -130,10 +118,9 @@ document.addEventListener('DOMContentLoaded', (event) => {
         readText(text, true);
         putData([-1, -1]);
         textarea.focus();
+        beginParse(true);
     };
-    const putData = (start, finish) => {
-        const text = makeText(false);
-        textarea.value = text;
+    const moveCursor = (start, finish) => {
         if (start) { // Put cursor
             const posStart = cursor2Pos(start);
             const posFinish = finish? cursor2Pos(finish): posStart;
@@ -141,6 +128,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
             textarea.selectionStart = posStart;
             textarea.selectionEnd = posFinish;
         };
+    }
+    const putData = (start, finish) => {
+        const text = makeText(false);
+        textarea.value = text;
+        moveCursor(start, finish);
     };
     const sendData = () => {
         readText(textarea.value || '', false);
@@ -156,9 +148,91 @@ document.addEventListener('DOMContentLoaded', (event) => {
         let col = row == 0? pos: pos - left.lastIndexOf('\n') - 1;
         return [row, col];
     };
+    const loadConfig = (url) => {
+        context.config = undefined;
+        if (!url) return false;
+        fetch(url).then((resp) => {
+            return resp.json();
+        }).then((json) => {
+            // console.log('Config loaded:', json);
+            if (json.marks) { // compile re
+                json.marks.forEach((item) => {
+                    item._re = new RegExp(item.re, item.i? 'i': undefined);
+                });
+            };
+            context.config = json;
+            beginParse(true);
+        }).catch((err) => {
+            console.log('Failed to load config:', err);
+        });
+    };
+    const parseWithConfig = (update) => {
+        sidebar.classList.add('hidden');
+        // Apply regexps and build sidebar
+        if (!context.config || !context.lines) return;
+        if (update)
+            readText(textarea.value || '', false);
+        const marks = context.config.marks || [];
+        let result = [];
+        if (marks.length) { // Have marks
+            context.lines.forEach((line, idx) => {
+                let item = {
+                    color: 'gray',
+                };
+                marks.forEach((mark) => {
+                    const m = mark._re.exec(line.text);
+                    if (!m) return;
+                    if (mark.shape) item.shape = mark.shape;
+                    if (mark.color) item.color = mark.color;
+                });
+                if (!item.shape) return;
+                result.push({
+                    item: item,
+                    row: idx,
+                });
+            });
+        };
+        if (result.length) { // Show and render
+            sidebar.classList.remove('hidden');
+            sidebar.innerHTML = ''; // Reset
+            result.map((item) => {
+                let wrap = document.createElement('div');
+                wrap.className = 'item';
+                let shape = document.createElement('div');
+                shape.className = item.item.shape;
+                shape.style.background = item.item.color;
+                shape.style.borderColor = item.item.color;
+                wrap.appendChild(shape);
+                wrap.addEventListener('click', (e) => {
+                    moveCursor([item.row, 0]);
+                    textarea.focus();
+                    textarea.dispatchEvent(new KeyboardEvent('keypress'));
+                });
+                return wrap;
+            }).forEach((item) => {
+                sidebar.appendChild(item);
+            });
+        };
+    };
+    let parseTimer;
+    const beginParse = (now) => {
+        // Schedule parseWithConfig
+        if (parseTimer) {
+            clearTimeout(parseTimer);
+            parseTimer = undefined;
+        }
+        if (!context.config) return false;
+        parseTimer = setTimeout(() => {
+            parseWithConfig(now? false: true);
+        }, now? 1: 1000);
+        return true;
+    };
     textarea.addEventListener('input', (evt) => {
         // Changed in editor
         sendData();
+    });
+    textarea.addEventListener('click', (evt) => {
+        beginParse();
     });
     textarea.addEventListener('keyup', (evt) => {
         if (evt.which === 13) { // Enter - indent
@@ -172,6 +246,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
                 sendData();
             };
         };
+        beginParse();
     });
     textarea.addEventListener('keydown', (evt) => {
         if (evt.which === 9) { // Tab
@@ -199,7 +274,22 @@ document.addEventListener('DOMContentLoaded', (event) => {
         };
     });
     window.addEventListener('message', (event) => {
+        // console.log('Message from parent:', event.data);
         loadData(event.data.id, event.data.text || '');
+    });
+    setupToolbar('tool_theme', 'checkbox', 'dark', false, (val) => {
+        document.body.className = val? 'dark': 'light';
+    });
+    setupToolbar('tool_tab', 'number', 'tab', 2, (val, init) => {
+        if (context.uuid) { // Re-tab
+            readText(textarea.value || '', false);
+            context.tab = val;
+            putData([-1, -1]);
+        } else
+            context.tab = val; // Only change
+    });
+    setupToolbar('tool_config', 'text', 'config_url', undefined, (val) => {
+        loadConfig(val);
     });
     notifyReady();
 });
