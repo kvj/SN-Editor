@@ -1,0 +1,11 @@
+{
+  "marks": [{
+    "re": "^\\-\\>\\s.+",
+    "shape": "circle",
+    "color": "lightgreen"
+  }, {
+    "re": "^\\-\\?\\s.+",
+    "shape": "triangle",
+    "color": "lightblue"
+  }]
+}
