@@ -4,8 +4,27 @@
     "shape": "circle",
     "color": "lightgreen"
   }, {
+    "re": "^\\>{2,}\\s.+",
+    "shape": "circle",
+    "color": "orange"
+  }, {
     "re": "^\\-\\?\\s.+",
     "shape": "triangle",
     "color": "lightblue"
+  }, {
+    "re": "@((\\d{4,})\\-)?(\\d{1,2})-(\\d{1,2})$",
+    "mode": "date",
+    "year": 2,
+    "month": 3,
+    "day": 4,
+    "<": {"opacity": 0.3},
+    "=": {"shape": "diamond"},
+    ">": {"color": "red", "shape": "diamond"}
+  }, {
+    "re": "^#{1,2}\\s.+",
+    "shape": null
+  }],
+  "prefixes": [{
+    "re": "^(\\s*[\\-#=/\\*\\>\\<]\\S?\\s)\\S"
   }]
 }
