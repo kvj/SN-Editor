@@ -170,6 +170,15 @@ document.addEventListener('DOMContentLoaded', (event) => {
             console.log('Failed to load config:', err);
         });
     };
+    const compareDate = (dt1, dt2) => {
+        if (dt1.getFullYear() !== dt2.getFullYear())
+            return dt1.getFullYear() < dt2.getFullYear()? '<': '>';
+        if (dt1.getMonth() !== dt2.getMonth())
+            return dt1.getMonth() < dt2.getMonth()? '<': '>';
+        if (dt1.getDate() !== dt2.getDate())
+            return dt1.getDate() < dt2.getDate()? '<': '>';
+        return '=';
+    };
     const parseWithConfig = (update) => {
         sidebar.classList.add('hidden');
         // Apply regexps and build sidebar
@@ -183,11 +192,33 @@ document.addEventListener('DOMContentLoaded', (event) => {
                 let item = {
                     color: 'gray',
                 };
+                const apply = (mark) => {
+                    if (mark.shape !== undefined) item.shape = mark.shape;
+                    if (mark.color !== undefined) item.color = mark.color;
+                    if (mark.opacity >= 0) item.opacity = mark.opacity;
+                };
                 marks.forEach((mark) => {
                     const m = mark._re.exec(line.text);
                     if (!m) return;
-                    if (mark.shape) item.shape = mark.shape;
-                    if (mark.color) item.color = mark.color;
+                    apply(mark);
+                    if (mark.mode === 'date') { // Parse as date
+                        const pattern = {
+                            '<': mark['<'],
+                            '=':  mark['='],
+                            '>':  mark['>'] || mark['='],
+                        };
+                        let dt = new Date();
+                        dt.setDate(1);
+                        if (m[mark.year])
+                            dt.setFullYear(parseInt(m[mark.year], 10));
+                        if (m[mark.month])
+                            dt.setMonth(parseInt(m[mark.month], 10)-1);
+                        if (m[mark.day])
+                            dt.setDate(parseInt(m[mark.day], 10));
+                        const cmp = compareDate(new Date(), dt);
+                        if (pattern[cmp])
+                            apply(pattern[cmp]);
+                    };
                 });
                 if (!item.shape) return;
                 result.push({
@@ -206,6 +237,8 @@ document.addEventListener('DOMContentLoaded', (event) => {
                 shape.className = item.item.shape;
                 shape.style.background = item.item.color;
                 shape.style.borderColor = item.item.color;
+                if (item.item.opacity >= 0)
+                    shape.style.opacity = item.item.opacity;
                 wrap.appendChild(shape);
                 wrap.addEventListener('click', (e) => {
                     moveCursor([item.row, 0]);
