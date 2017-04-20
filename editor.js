@@ -149,17 +149,21 @@ document.addEventListener('DOMContentLoaded', (event) => {
         return [row, col];
     };
     const loadConfig = (url) => {
+        const compileRe = (arr) => {
+            if (!arr) return;
+            arr.forEach((item) => {
+                if (item.re)
+                    item._re = new RegExp(item.re, item.i? 'i': undefined);
+            });
+        }
         context.config = undefined;
         if (!url) return false;
         fetch(url).then((resp) => {
             return resp.json();
         }).then((json) => {
             // console.log('Config loaded:', json);
-            if (json.marks) { // compile re
-                json.marks.forEach((item) => {
-                    item._re = new RegExp(item.re, item.i? 'i': undefined);
-                });
-            };
+            compileRe(json.marks);
+            compileRe(json.prefixes);
             context.config = json;
             beginParse(true);
         }).catch((err) => {
@@ -240,8 +244,23 @@ document.addEventListener('DOMContentLoaded', (event) => {
             readText(textarea.value || '', false);
             if (start[0] > 0 && context.lines.length>start[0]) { 
                 // Add indent from prev line
-                context.lines[start[0]].indent += context.lines[start[0]-1].indent;
-                start[1] += context.tab * context.lines[start[0]-1].indent;
+                const line = context.lines[start[0]];
+                const prev = context.lines[start[0]-1];
+                line.indent += prev.indent;
+                start[1] += context.tab * prev.indent;
+                // Add optional prefix from prev line
+                let prefix;
+                if (context.config && context.config.prefixes) {
+                    context.config.prefixes.forEach((item) => {
+                        const m = item._re.exec(prev.text);
+                        if (m)
+                            prefix = m.length > 0? m[1]: m[0];
+                    });
+                }
+                if (prefix) { // Add prefix
+                    line.text = prefix + line.text;
+                    start[1] += prefix.length;
+                };
                 putData(start);
                 sendData();
             };
