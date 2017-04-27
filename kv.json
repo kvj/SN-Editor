@@ -21,7 +21,7 @@
     "=": {"shape": "diamond"},
     ">": {"color": "red", "shape": "diamond"}
   }, {
-    "re": "^#{1,2}\\s.+",
+    "re": "^.?#\\s.+",
     "shape": null
   }],
   "prefixes": [{
